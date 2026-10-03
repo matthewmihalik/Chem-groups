@@ -271,12 +271,14 @@ function pool(){
   return D;
 }
 const pick=(arr,n,excl)=>{const c=arr.filter(x=>!excl.includes(x));for(let i=c.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[c[i],c[j]]=[c[j],c[i]];}return c.slice(0,n);};
+let queue=[],roundSize=0,roundDone=0,poolKey='';
+function refill(P){queue=pick(P,P.length,[]);roundSize=P.length;roundDone=0;}
 function nextQ(){
   const P=pool(); if(!P.length){q=null;render();return;}
-  // weight toward items missed more often
-  const weighted=[];for(const d of P){const s=st(d.n);const w=1+Math.max(0,s.w-s.r)*2;for(let i=0;i<w;i++)weighted.push(d);}
-  let ans=weighted[Math.floor(Math.random()*weighted.length)];
-  if(q&&P.length>1&&ans.n===q.ans.n)ans=P[(P.indexOf(ans)+1)%P.length];
+  const key=scope+'|'+scopeGroup+'|'+P.length;
+  if(key!==poolKey||!queue.length){poolKey=key;refill(P);}
+  let ans=queue.shift();
+  if(q&&P.length>1&&ans.n===q.ans.n&&queue.length){queue.push(ans);ans=queue.shift();}
   let dis=pick(D.filter(d=>d.g===ans.g),3,[ans]);
   if(dis.length<3)dis=dis.concat(pick(D.filter(d=>d.g!==ans.g),3-dis.length,[ans,...dis]));
   const opts=pick([ans,...dis],4,[]);
@@ -286,7 +288,7 @@ function render(){
   const card=document.getElementById('card');
   document.getElementById('score').innerHTML=`<b>${session.r}</b> right · <b>${session.w}</b> wrong${session.streak>=3?` · 🔥 ${session.streak}`:''}`;
   const P=pool();
-  document.getElementById('poolInfo').textContent=`${P.length} group${P.length===1?'':'s'} in this set`;
+  document.getElementById('poolInfo').textContent=`${Math.min(roundDone+1,roundSize)} of ${roundSize} this round`;
   if(!q){card.className='card';card.innerHTML=`<div class="empty">${scope==='missed'?'Nothing missed yet — nice. Pick another set to keep going.':'No groups in this set.'}</div>`;return;}
   card.className='card'+(q.ans.m?' memo':'');
   let h='';
@@ -305,7 +307,7 @@ function answer(i){
   if(locked)return;locked=true;
   const btns=[...document.querySelectorAll('.opt')];const ok=q.opts[i].n===q.ans.n;const s=st(q.ans.n);
   btns.forEach((b,k)=>{b.disabled=true;if(q.opts[k].n===q.ans.n)b.classList.add('correct');else if(k===i)b.classList.add('wrong');else b.classList.add('dim');});
-  if(ok){s.r++;session.r++;session.streak++;}else{s.w++;session.w++;session.streak=0;}
+  roundDone++;if(ok){s.r++;session.r++;session.streak++;}else{s.w++;session.w++;session.streak=0;queue.splice(Math.min(queue.length,3+Math.floor(Math.random()*3)),0,q.ans);}
   save();
   const fb=document.getElementById('fb');fb.className='fb '+(ok?'ok':'no');
   fb.textContent=ok?'Correct':(mode==='SN'?`It's ${q.ans.n}`:'Not that one — the correct structure is marked');
